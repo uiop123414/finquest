@@ -1,0 +1,28 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+backend/bin/
+backend/finquest
+*.exe
+*.test
+*.out
+
+# Node / Frontend
+frontend/node_modules
+frontend/dist/
+frontend/.vite/
+
+# Docker volumes
+pgdata/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

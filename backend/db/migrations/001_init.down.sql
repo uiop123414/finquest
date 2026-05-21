@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS user_challenges;
+DROP TABLE IF EXISTS challenges;
+DROP TABLE IF EXISTS goals;
+DROP TABLE IF EXISTS user_achievements;
+DROP TABLE IF EXISTS achievements;
+DROP TABLE IF EXISTS xp_events;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS users;
