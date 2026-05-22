@@ -129,9 +129,10 @@ classDiagram
 
 | Пакет | Классы / Структуры | Ответственность |
 |-------|-------------------|----------------|
-| `models` | User, Transaction, Category, Goal, Deposit, Credit, Achievement | Структуры данных, соответствующие таблицам БД |
+| `models` | User, Transaction, Category, Goal, Deposit, Credit, Achievement, XPEvent | Структуры данных, соответствующие таблицам БД |
 | `handlers` | Handler | HTTP-хендлеры, разбор запросов, формирование ответов |
-| `services` | GamificationService | Бизнес-логика XP, уровней, ачивок |
+| `repository` | TransactionRepo, GoalRepo, DepositRepo, CreditRepo, CategoryRepo, UserRepo, AchievementRepo, XPEventRepo | Интерфейсы и PostgreSQL-реализации для всех сущностей |
+| `services` | GamificationService, RuleBasedCategorizer | Бизнес-логика XP, уровней, ачивок; rule-based категоризация |
 | `config` | Config | Загрузка переменных окружения |
-| `middleware` | AuthMiddleware | Проверка JWT, установка userID в контекст |
+| `middleware` | AuthRequired, CORS | Проверка JWT + установка userID; CORS-заголовки |
 | `db` | — | Подключение к PostgreSQL (sqlx) |

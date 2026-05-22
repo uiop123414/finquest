@@ -428,7 +428,7 @@ func NewAchievementRepo(db *sqlx.DB) AchievementRepo { return &achievementRepo{d
 
 func (r *achievementRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]models.Achievement, error) {
 	query := `
-		SELECT a.id, a.code, a.name, a.description, ua.created_at AS earned_at
+		SELECT a.id, a.code, a.name, a.description, ua.earned_at
 		FROM achievements a
 		LEFT JOIN user_achievements ua ON ua.achievement_id = a.id AND ua.user_id = $1
 		ORDER BY a.id`

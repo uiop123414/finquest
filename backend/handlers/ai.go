@@ -194,7 +194,7 @@ func buildPrompt(context string) string {
 func callAnthropic(ctx context.Context, apiKey, prompt string) (string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"model":      "claude-haiku-4-5-20251001",
-		"max_tokens": 600,
+		"max_tokens": 1500,
 		"messages":   []map[string]string{{"role": "user", "content": prompt}},
 	})
 	req, err := http.NewRequestWithContext(ctx, "POST",

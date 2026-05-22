@@ -10,21 +10,7 @@ jobs:
   backend:
     name: Backend — build & test
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: finquest_test
-          POSTGRES_USER: finquest
-          POSTGRES_PASSWORD: finquest
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+    # Docker доступен на ubuntu-latest; testcontainers поднимает postgres сам.
 
     steps:
       - uses: actions/checkout@v4
@@ -33,17 +19,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-
-      - name: Install migrate
-        run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz | tar xz
-          sudo mv migrate /usr/local/bin/migrate
-
-      - name: Run migrations
-        run: |
-          migrate -path backend/db/migrations \
-            -database "postgresql://finquest:finquest@localhost:5432/finquest_test?sslmode=disable" \
-            up
 
       - name: Download dependencies
         run: cd backend && go mod download
@@ -55,8 +30,6 @@ jobs:
         run: cd backend && go test ./services/... ./repository/... -v
 
       - name: Integration tests
-        env:
-          TEST_DATABASE_URL: "postgresql://finquest:finquest@localhost:5432/finquest_test?sslmode=disable"
         run: cd backend && go test -tags=integration -v ./...
 
   frontend:

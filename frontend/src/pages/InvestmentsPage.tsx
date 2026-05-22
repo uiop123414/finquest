@@ -142,7 +142,7 @@ export default function InvestmentsPage() {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40" onClick={() => setModal(null)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40 px-4" onClick={() => setModal(null)}>
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-semibold text-gray-800">{modal.type === 'create' ? 'Новый депозит' : 'Редактировать депозит'}</h2>
             <input type="text" placeholder="Банк" value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />

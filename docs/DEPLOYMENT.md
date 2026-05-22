@@ -32,7 +32,8 @@ cp .env.example .env
 DATABASE_URL=postgresql://finquest:finquest@db:5432/finquest?sslmode=disable
 JWT_SECRET=change-me-in-production
 PORT=8000
-ANTHROPIC_API_KEY=          # опционально
+ANTHROPIC_API_KEY=          # опционально (Claude Haiku)
+GEMINI_API_KEY=              # опционально (Gemini 2.0 Flash, бесплатно)
 ```
 
 ### 3. Запустить
@@ -45,7 +46,7 @@ make start
 
 Контейнеры запускаются в порядке:
 1. `db` — PostgreSQL (healthcheck pg_isready)
-2. `migrate` — применяет SQL-миграции (001–003), завершается
+2. `migrate` — применяет SQL-миграции (001–005), завершается
 3. `backend` — Go API (стартует после migrate)
 4. `frontend` — nginx + React (стартует после backend)
 
@@ -169,11 +170,13 @@ make migrate-down
 
 ```bash
 # Создайте файлы вручную:
-touch backend/db/migrations/004_your_change.up.sql
-touch backend/db/migrations/004_your_change.down.sql
+touch backend/db/migrations/006_your_change.up.sql
+touch backend/db/migrations/006_your_change.down.sql
 ```
 
 Формат имени: `NNN_description.up.sql` / `NNN_description.down.sql`
+
+Текущие миграции: 001–005 (001 — схема, 002/005 — seed-данные, 003 — goals.completed_at, 004 — deposits/credits)
 
 ---
 
@@ -229,4 +232,4 @@ volumes:
 | 502 Bad Gateway | `backend` упал | `docker compose restart backend` |
 | `ERR_CONNECTION_REFUSED :3000` | `frontend` не собрался | `make logs` → ищите ошибки npm/nginx |
 | Миграция падает | БД недоступна | Проверить `docker compose ps db`, `make logs db` |
-| AI-совет не работает | Нет `ANTHROPIC_API_KEY` | Добавить ключ в `.env`, `make start` |
+| AI-совет не работает | Нет API-ключа | Добавить `GEMINI_API_KEY` (бесплатно) или `ANTHROPIC_API_KEY` в `.env`, `make start` |

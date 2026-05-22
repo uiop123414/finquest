@@ -73,7 +73,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <label className="text-sm text-gray-500">Категория:</label>
         <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
           <option value="">Все</option>
@@ -83,7 +83,7 @@ export default function TransactionsPage() {
 
       {/* Add form modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40 px-4">
           <form onSubmit={addTransaction} className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-3">
             <h2 className="font-semibold text-gray-800">Новая транзакция</h2>
             <input type="number" placeholder="Сумма" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" required />
@@ -105,8 +105,35 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Mobile card list */}
+      <div className="block sm:hidden space-y-2">
+        {txs.map((tx) => (
+          <div key={tx.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-700 truncate">{tx.note || '—'}</p>
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  <span className="text-xs text-gray-400">{catName(tx.category_id)}</span>
+                  <span className="text-xs text-gray-300">·</span>
+                  <span className="text-xs text-gray-400">{tx.date.slice(0, 10)}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`font-semibold text-sm ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
+                  {tx.type === 'income' ? '+' : '-'}{fmt(tx.amount)}
+                </span>
+                <button onClick={() => deleteTransaction(tx.id)} className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {txs.length === 0 && (
+          <div className="bg-white rounded-xl p-6 text-center text-gray-400 text-sm">Нет транзакций</div>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
             <tr>

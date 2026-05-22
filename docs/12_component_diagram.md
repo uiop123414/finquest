@@ -32,12 +32,20 @@ graph TB
                 AIH["ai.go\nadvice · chat"]
             end
 
+            subgraph Repos["repository/"]
+                TxRepo["TransactionRepo"]
+                GoalRepo["GoalRepo"]
+                DepRepo["DepositRepo"]
+                CrRepo["CreditRepo"]
+                UserRepo["UserRepo / AchievementRepo / XPEventRepo"]
+            end
+
             subgraph Services["services/"]
                 GamSvc["gamification.go\nAwardXP · checkAchievements"]
                 RuleSvc["rule_based.go\ncategorize · advice"]
             end
 
-            JWTMw["middleware/\nJWT Auth"]
+            JWTMw["middleware/\nJWT Auth + CORS"]
             Config["config/\n.env loader"]
         end
 
@@ -71,8 +79,9 @@ graph TB
     TxH --> RuleSvc
     AIH --> RuleSvc
 
-    %% Handlers → DB
-    Handlers -->|"sqlx"| Postgres
+    %% Handlers → Repos → DB
+    Handlers --> Repos
+    Repos -->|"sqlx"| Postgres
     Services -->|"sqlx"| Postgres
 
     %% AI
@@ -99,7 +108,9 @@ graph TB
 | **nginx** | nginx:alpine | Раздача статических файлов React, reverse proxy к API |
 | **Gin Router** | gin-gonic/gin | HTTP маршрутизация, группировка по префиксу `/api/v1` |
 | **JWT Middleware** | golang-jwt/jwt/v5 | Проверка Bearer токена, установка `userID` в контекст |
-| **handlers/** | Go stdlib | Разбор запросов, вызов БД, формирование JSON-ответов |
+| **CORS Middleware** | gin-contrib/cors | Разрешает запросы с localhost:5173 / localhost:3000 |
+| **repository/** | squirrel + sqlx | Типизированный доступ к БД через интерфейсы репозиториев |
+| **handlers/** | Go | Разбор запросов, вызов репозиториев, формирование JSON-ответов |
 | **GamificationService** | Go | XP, уровни, проверка и выдача ачивок (атомарно в транзакции БД) |
 | **RuleBasedService** | Go | Категоризация CSV по ключевым словам, fallback AI-советы |
 | **Axios Client** | axios + interceptors | JWT в заголовках, автообновление токена при 401 |

@@ -16,26 +16,35 @@
 | 1 | `services/gamification_test.go` | `TestCalculateLevel` | 6 граничных значений XP → уровень (0→1, 99→1, 100→2, 400→5) | ✅ PASS |
 | 2 | `services/gamification_test.go` | `TestLevelProgressPct` | Прогресс-процент: 150 XP → 50%, 0 XP → 0% | ✅ PASS |
 | 3 | `services/rule_based_test.go` | `TestRuleBasedCategorize` | 6 кейсов распознавания категорий по ключевым словам (Магнит→Еда, Такси→Транспорт и др.) | ✅ PASS |
+| 4 | `repository/gamification_test.go` | `TestAwardXP_AddsXP` | AwardXP прибавляет delta к xp_total пользователя | ✅ PASS |
+| 5 | `repository/gamification_test.go` | `TestAwardXP_LevelUpAt100` | Уровень повышается до 2 при накоплении 100 XP | ✅ PASS |
+| 6 | `repository/gamification_test.go` | `TestAwardXP_RecordsEvent` | Событие XP записывается в журнал с верным reason | ✅ PASS |
+| 7 | `repository/gamification_test.go` | `TestAwardXP_UnlocksFirstTransaction` | Ачивка `first_transaction` выдаётся после первой транзакции | ✅ PASS |
+| 8 | `repository/gamification_test.go` | `TestAwardXP_UnlocksLevel5` | Ачивка `level_5` выдаётся при достижении 5 уровня (400 XP) | ✅ PASS |
+| 9 | `repository/gamification_test.go` | `TestMockTxRepo_ListFiltersUsers` | List возвращает только транзакции нужного пользователя | ✅ PASS |
+| 10 | `repository/gamification_test.go` | `TestMockTxRepo_CountAfterDelete` | Count = 0 после удаления единственной транзакции | ✅ PASS |
 
 ### Unit-тесты (Frontend)
 
 | # | Файл | Описание | Статус |
 |---|------|----------|--------|
-| 4 | `components/XpBar.test.tsx` | Рендер уровня и XP; наличие прогресс-бара | ✅ PASS |
-| 5 | `pages/AchievementsPage.test.tsx` | Отображение разблокированных и заблокированных ачивок | ✅ PASS |
+| 11 | `components/XpBar.test.tsx` | Рендер уровня и XP; наличие прогресс-бара | ✅ PASS |
+| 12 | `pages/AchievementsPage.test.tsx` | Отображение разблокированных и заблокированных ачивок | ✅ PASS |
 
-### Интеграционные тесты (Go, тег `integration`)
+### Интеграционные тесты (Go, тег `integration`, testcontainers)
+
+Тесты запускают PostgreSQL в Docker-контейнере через `testcontainers-go/modules/postgres`. Внешняя БД не требуется — достаточно запущенного Docker.
 
 | # | Функция | Что проверяет | Статус |
 |---|---------|---------------|--------|
-| 6 | `TestRegister` | Успешная регистрация (201) + повторная регистрация (409) | ✅ PASS |
-| 7 | `TestLogin` | Успешный вход (200) + неверный пароль (401) | ✅ PASS |
-| 8 | `TestCreateTransaction` | 5 кейсов: расход без категории, доход, неверный тип (400), неверная дата (400), нулевая сумма (400) | ✅ PASS |
-| 9 | `TestGetTransactions` | Список транзакций (200), непустой массив после создания | ✅ PASS |
-| 10 | `TestAnalyticsSummary` | Поля income/expense/balance/by_category присутствуют в ответе | ✅ PASS |
-| 11 | `TestGamificationProfile` | Поля xp_total/level/achievements присутствуют в ответе | ✅ PASS |
+| 13 | `TestRegister` | Успешная регистрация (201) + повторная регистрация (409) | ✅ PASS |
+| 14 | `TestLogin` | Успешный вход (200) + неверный пароль (401) | ✅ PASS |
+| 15 | `TestCreateTransaction` | 5 кейсов: расход без категории, доход, неверный тип (400), неверная дата (400), нулевая сумма (400) | ✅ PASS |
+| 16 | `TestGetTransactions` | Список транзакций (200), непустой массив после создания | ✅ PASS |
+| 17 | `TestAnalyticsSummary` | Поля income/expense/balance/by_category присутствуют в ответе | ✅ PASS |
+| 18 | `TestGamificationProfile` | Поля xp_total/level/achievements присутствуют в ответе | ✅ PASS |
 
-**Итого автотестов:** 11 тестовых функций (3 unit Go + 2 unit Frontend + 6 integration)
+**Итого автотестов:** 18 тестовых функций (10 unit Go + 2 unit Frontend + 6 integration)
 
 ---
 
@@ -141,9 +150,9 @@ date,amount,type,note
 
 | Категория | Количество | Статус |
 |-----------|-----------|--------|
-| Unit-тесты Go | 3 функции (14 кейсов) | ✅ Все проходят |
+| Unit-тесты Go (`services/` + `repository/`) | 10 функций | ✅ Все проходят |
 | Unit-тесты Frontend | 2 файла (3 теста) | ✅ Все проходят |
-| Интеграционные тесты | 6 функций (12 кейсов) | ✅ Все проходят |
+| Интеграционные тесты (testcontainers) | 6 функций (12 кейсов) | ✅ Все проходят |
 | Ручные сценарии | 5 сценариев (35 шагов) | ✅ Все пройдены |
 
 **Критических дефектов не обнаружено.**

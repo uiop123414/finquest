@@ -47,6 +47,9 @@
 | PB-33 | Автообновление JWT (axios interceptor) | 🔴 Must | 2 | ✅ Done | S1 |
 | PB-34 | nginx reverse proxy с Docker DNS resolver | 🔴 Must | 1 | ✅ Done | S1 |
 | PB-35 | Поддержка Gemini API как бесплатной альтернативы | 🟢 Could | 2 | ✅ Done | S5 |
+| PB-36 | CORS вынесен в `middleware/cors.go` (рефакторинг) | 🟢 Could | 1 | ✅ Done | S5 |
+| PB-37 | OpenAPI 3.0.3 спецификация (`docs/openapi.yaml`) | 🟡 Should | 3 | ✅ Done | S5 |
+| PB-38 | Интеграционные тесты на testcontainers (без внешней БД) | 🟡 Should | 3 | ✅ Done | S5 |
 
 ---
 
@@ -55,8 +58,8 @@
 | Приоритет | Кол-во задач | Story Points |
 |-----------|:-----------:|:------------:|
 | 🔴 Must Have | 12 | 27 |
-| 🟡 Should Have | 16 | 43 |
-| 🟢 Could Have | 7 | 18 |
-| **Итого** | **35** | **88** |
+| 🟡 Should Have | 18 | 49 |
+| 🟢 Could Have | 8 | 19 |
+| **Итого** | **38** | **95** |
 
 **Все задачи выполнены.** ✅

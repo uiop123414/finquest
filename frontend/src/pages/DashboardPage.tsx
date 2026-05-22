@@ -137,16 +137,18 @@ export default function DashboardPage() {
           {/* Pie chart */}
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Расходы по категориям</h2>
-            <div className="flex gap-4 items-center">
-              <ResponsiveContainer width={180} height={180}>
-                <PieChart>
-                  <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={40}>
-                    {summary.by_category.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => fmt(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-              <ul className="space-y-1.5 text-xs flex-1">
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="w-full sm:w-44 flex-shrink-0">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={40}>
+                      {summary.by_category.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="space-y-1.5 text-xs w-full">
                 {summary.by_category.slice(0, 7).map((item, i) => (
                   <li key={i} className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
@@ -253,10 +255,10 @@ function AIAdviceWidget() {
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-lg">🤖</span>
           <h2 className="text-sm font-semibold text-gray-700">Мнение нейросети</h2>
-          <span className="text-xs text-gray-400">учитывает транзакции, депозиты, кредиты и цели</span>
+          <span className="hidden sm:inline text-xs text-gray-400">учитывает транзакции, депозиты, кредиты и цели</span>
         </div>
         <button
           onClick={load}

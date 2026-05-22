@@ -136,8 +136,8 @@ export default function GoalsPage() {
 
       {/* ── Modals ────────────────────────────────────────────────────── */}
       {modal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40" onClick={() => setModal(null)}>
-          <div onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40 px-4" onClick={() => setModal(null)}>
+          <div className="w-full flex justify-center" onClick={(e) => e.stopPropagation()}>
 
             {/* Create */}
             {modal.type === 'create' && (
@@ -156,7 +156,7 @@ export default function GoalsPage() {
 
             {/* Deposit */}
             {modal.type === 'deposit' && (
-              <form onSubmit={handleDeposit} className="bg-white rounded-2xl p-6 w-96 shadow-xl space-y-3">
+              <form onSubmit={handleDeposit} className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl space-y-3">
                 <h2 className="font-semibold text-gray-800">Пополнить «{modal.goal.name}»</h2>
                 <p className="text-xs text-gray-400">Текущий прогресс: {fmt(modal.goal.current_amount)} / {fmt(modal.goal.target_amount)}</p>
                 <input

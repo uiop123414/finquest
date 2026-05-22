@@ -2,7 +2,7 @@
 
 # ─── Быстрый старт ───────────────────────────────────────────────────────────
 start:
-	@if not exist .env copy .env.example .env
+	@[ -f .env ] || cp .env.example .env
 	docker-compose up --build -d
 	@echo ""
 	@echo "✓  FinQuest запущен!"
@@ -74,9 +74,9 @@ test-go:
 test-js:
 	cd frontend && npm run test
 
-# Интеграционные тесты (требуют запущенной БД)
+# Интеграционные тесты (поднимают postgres через testcontainers, Docker обязателен)
 test-integration:
-	cd backend && TEST_DATABASE_URL="$(DATABASE_URL)" go test -v -tags=integration ./...
+	cd backend && go test -tags=integration -v ./...
 
 # ─── Docker ───────────────────────────────────────────────────────────────────
 up:
@@ -102,7 +102,7 @@ help:
 	@echo "  make migrate-down      — откатить последнюю миграцию"
 	@echo "  make lint              — запустить golangci-lint + eslint"
 	@echo "  make test              — unit-тесты Go + JS"
-	@echo "  make test-integration  — интеграционные тесты (нужна БД)"
+	@echo "  make test-integration  — интеграционные тесты (нужен Docker, БД поднимается автоматически)"
 	@echo "  make logs              — логи Docker-контейнеров"
 	@echo "  make down              — остановить контейнеры"
 	@echo "  make down-volumes      — остановить контейнеры + удалить данные БД"

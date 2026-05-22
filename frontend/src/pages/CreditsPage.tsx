@@ -145,7 +145,7 @@ export default function CreditsPage() {
 
       {/* Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40" onClick={() => setModal(null)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-40 px-4" onClick={() => setModal(null)}>
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-semibold text-gray-800">{modal.type === 'create' ? 'Новый кредит' : 'Редактировать кредит'}</h2>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
