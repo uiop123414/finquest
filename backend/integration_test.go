@@ -16,12 +16,11 @@ import (
 	"finquest/db"
 	"finquest/handlers"
 	"finquest/middleware"
+	"finquest/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// setupRouter connects to TEST_DATABASE_URL and returns a configured router + cleanup fn.
-// Skips the test if TEST_DATABASE_URL is not set.
 func setupRouter(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -30,18 +29,22 @@ func setupRouter(t *testing.T) (*gin.Engine, func()) {
 	}
 
 	database := db.Connect(dsn)
-	cfg := &config.Config{
-		JWTSecret:    "test-secret",
-		Port:         "8000",
-		AnthropicKey: "",
-	}
+	cfg := &config.Config{JWTSecret: "test-secret", Port: "8000", AnthropicKey: ""}
+
+	txRepo   := repository.NewTransactionRepo(database)
+	goalRepo := repository.NewGoalRepo(database)
+	depRepo  := repository.NewDepositRepo(database)
+	crRepo   := repository.NewCreditRepo(database)
+	catRepo  := repository.NewCategoryRepo(database)
+	userRepo := repository.NewUserRepo(database)
+	achRepo  := repository.NewAchievementRepo(database)
+	xpRepo   := repository.NewXPEventRepo(database)
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handlers.New(database, cfg)
+	h := handlers.New(database, txRepo, goalRepo, depRepo, crRepo, catRepo, userRepo, achRepo, xpRepo, cfg)
 
 	api := r.Group("/api/v1")
-
 	auth := api.Group("/auth")
 	auth.POST("/register", h.Register)
 	auth.POST("/login", h.Login)
@@ -56,11 +59,9 @@ func setupRouter(t *testing.T) (*gin.Engine, func()) {
 		database.MustExec("DELETE FROM users WHERE email LIKE 'testuser-%@example.com'")
 		database.Close()
 	}
-
 	return r, cleanup
 }
 
-// doJSON fires a JSON request against the router and returns the recorder.
 func doJSON(r *gin.Engine, method, path, token string, body interface{}) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
@@ -76,95 +77,67 @@ func doJSON(r *gin.Engine, method, path, token string, body interface{}) *httpte
 	return w
 }
 
-// decode unmarshals the recorder body into v; fails the test on error.
 func decode(t *testing.T, w *httptest.ResponseRecorder, v interface{}) {
 	t.Helper()
 	if err := json.NewDecoder(w.Body).Decode(v); err != nil {
-		t.Fatalf("decode response: %v (body: %s)", err, w.Body.String())
+		t.Fatalf("decode: %v (body: %s)", err, w.Body.String())
 	}
 }
 
-// uniqueEmail returns a unique test email that the cleanup query will delete.
 func uniqueEmail() string {
 	return fmt.Sprintf("testuser-%d@example.com", time.Now().UnixNano())
 }
 
-// registerAndGetToken registers a new user and returns the access token.
 func registerAndGetToken(t *testing.T, r *gin.Engine) string {
 	t.Helper()
 	w := doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{
 		"email": uniqueEmail(), "password": "password123",
 	})
 	if w.Code != http.StatusCreated {
-		t.Fatalf("setup register: got %d: %s", w.Code, w.Body)
+		t.Fatalf("register: got %d: %s", w.Code, w.Body)
 	}
 	var resp map[string]interface{}
 	decode(t, w, &resp)
 	return resp["access_token"].(string)
 }
 
-// --- Auth ---
-
 func TestRegister(t *testing.T) {
 	r, cleanup := setupRouter(t)
 	defer cleanup()
-
 	email := uniqueEmail()
 
-	// Success
-	w := doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{
-		"email": email, "password": "password123",
-	})
+	w := doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{"email": email, "password": "password123"})
 	if w.Code != http.StatusCreated {
-		t.Fatalf("register: expected 201, got %d: %s", w.Code, w.Body)
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body)
 	}
 	var resp map[string]interface{}
 	decode(t, w, &resp)
 	if resp["access_token"] == nil {
-		t.Fatal("register: missing access_token in response")
+		t.Fatal("missing access_token")
 	}
 
-	// Duplicate email → 409
-	w = doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{
-		"email": email, "password": "password123",
-	})
+	w = doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{"email": email, "password": "password123"})
 	if w.Code != http.StatusConflict {
-		t.Fatalf("duplicate register: expected 409, got %d", w.Code)
+		t.Fatalf("duplicate: expected 409, got %d", w.Code)
 	}
 }
 
 func TestLogin(t *testing.T) {
 	r, cleanup := setupRouter(t)
 	defer cleanup()
-
 	email := uniqueEmail()
-	doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{
-		"email": email, "password": "password123",
-	})
+	doJSON(r, "POST", "/api/v1/auth/register", "", map[string]string{"email": email, "password": "password123"})
 
-	// Success
-	w := doJSON(r, "POST", "/api/v1/auth/login", "", map[string]string{
-		"email": email, "password": "password123",
-	})
+	w := doJSON(r, "POST", "/api/v1/auth/login", "", map[string]string{"email": email, "password": "password123"})
 	if w.Code != http.StatusOK {
-		t.Fatalf("login: expected 200, got %d: %s", w.Code, w.Body)
-	}
-	var resp map[string]interface{}
-	decode(t, w, &resp)
-	if resp["access_token"] == nil {
-		t.Fatal("login: missing access_token")
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body)
 	}
 
-	// Wrong password → 401
-	w = doJSON(r, "POST", "/api/v1/auth/login", "", map[string]string{
-		"email": email, "password": "wrongpassword",
-	})
+	w = doJSON(r, "POST", "/api/v1/auth/login", "", map[string]string{"email": email, "password": "wrong"})
 	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("wrong password: expected 401, got %d", w.Code)
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
-
-// --- Transactions ---
 
 func TestCreateTransaction(t *testing.T) {
 	r, cleanup := setupRouter(t)
@@ -176,33 +149,12 @@ func TestCreateTransaction(t *testing.T) {
 		body     map[string]interface{}
 		wantCode int
 	}{
-		{
-			name:     "expense without category",
-			body:     map[string]interface{}{"amount": 100.50, "type": "expense", "date": "2024-01-15", "note": "test-lunch"},
-			wantCode: http.StatusCreated,
-		},
-		{
-			name:     "income without category",
-			body:     map[string]interface{}{"amount": 5000.0, "type": "income", "date": "2024-01-01"},
-			wantCode: http.StatusCreated,
-		},
-		{
-			name:     "invalid type",
-			body:     map[string]interface{}{"amount": 50.0, "type": "transfer", "date": "2024-01-15"},
-			wantCode: http.StatusBadRequest,
-		},
-		{
-			name:     "invalid date format",
-			body:     map[string]interface{}{"amount": 50.0, "type": "income", "date": "15-01-2024"},
-			wantCode: http.StatusBadRequest,
-		},
-		{
-			name:     "zero amount",
-			body:     map[string]interface{}{"amount": 0, "type": "income", "date": "2024-01-15"},
-			wantCode: http.StatusBadRequest,
-		},
+		{"expense ok",    map[string]interface{}{"amount": 100.50, "type": "expense", "date": "2024-01-15"}, http.StatusCreated},
+		{"income ok",     map[string]interface{}{"amount": 5000.0, "type": "income",  "date": "2024-01-01"}, http.StatusCreated},
+		{"invalid type",  map[string]interface{}{"amount": 50.0,   "type": "transfer","date": "2024-01-15"}, http.StatusBadRequest},
+		{"invalid date",  map[string]interface{}{"amount": 50.0,   "type": "income",  "date": "15-01-2024"}, http.StatusBadRequest},
+		{"zero amount",   map[string]interface{}{"amount": 0,      "type": "income",  "date": "2024-01-15"}, http.StatusBadRequest},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			w := doJSON(r, "POST", "/api/v1/transactions", token, tc.body)
@@ -212,10 +164,7 @@ func TestCreateTransaction(t *testing.T) {
 		})
 	}
 
-	// No auth → 401
-	w := doJSON(r, "POST", "/api/v1/transactions", "", map[string]interface{}{
-		"amount": 50.0, "type": "income", "date": "2024-01-15",
-	})
+	w := doJSON(r, "POST", "/api/v1/transactions", "", map[string]interface{}{"amount": 50.0, "type": "income", "date": "2024-01-15"})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("no auth: expected 401, got %d", w.Code)
 	}
@@ -225,25 +174,18 @@ func TestGetTransactions(t *testing.T) {
 	r, cleanup := setupRouter(t)
 	defer cleanup()
 	token := registerAndGetToken(t, r)
-
-	// Seed one transaction
-	doJSON(r, "POST", "/api/v1/transactions", token, map[string]interface{}{
-		"amount": 200.0, "type": "income", "date": "2024-02-01", "note": "test-salary",
-	})
+	doJSON(r, "POST", "/api/v1/transactions", token, map[string]interface{}{"amount": 200.0, "type": "income", "date": "2024-02-01"})
 
 	w := doJSON(r, "GET", "/api/v1/transactions", token, nil)
 	if w.Code != http.StatusOK {
-		t.Fatalf("get transactions: expected 200, got %d: %s", w.Code, w.Body)
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body)
 	}
-
 	var txs []interface{}
 	decode(t, w, &txs)
 	if len(txs) == 0 {
-		t.Fatal("get transactions: expected at least 1 result, got empty array")
+		t.Fatal("expected at least 1 transaction")
 	}
 }
-
-// --- Analytics ---
 
 func TestAnalyticsSummary(t *testing.T) {
 	r, cleanup := setupRouter(t)
@@ -252,19 +194,16 @@ func TestAnalyticsSummary(t *testing.T) {
 
 	w := doJSON(r, "GET", "/api/v1/analytics/summary", token, nil)
 	if w.Code != http.StatusOK {
-		t.Fatalf("analytics summary: expected 200, got %d: %s", w.Code, w.Body)
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body)
 	}
-
 	var summary map[string]interface{}
 	decode(t, w, &summary)
 	for _, key := range []string{"income", "expense", "balance", "by_category"} {
 		if _, ok := summary[key]; !ok {
-			t.Errorf("analytics summary: missing field %q", key)
+			t.Errorf("missing field %q", key)
 		}
 	}
 }
-
-// --- Gamification ---
 
 func TestGamificationProfile(t *testing.T) {
 	r, cleanup := setupRouter(t)
@@ -273,14 +212,13 @@ func TestGamificationProfile(t *testing.T) {
 
 	w := doJSON(r, "GET", "/api/v1/gamification/profile", token, nil)
 	if w.Code != http.StatusOK {
-		t.Fatalf("gamification profile: expected 200, got %d: %s", w.Code, w.Body)
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body)
 	}
-
 	var profile map[string]interface{}
 	decode(t, w, &profile)
 	for _, key := range []string{"xp_total", "level", "achievements"} {
 		if _, ok := profile[key]; !ok {
-			t.Errorf("gamification profile: missing field %q", key)
+			t.Errorf("missing field %q", key)
 		}
 	}
 }

@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/csv"
-	"finquest/models"
+	"finquest/repository"
 	"finquest/services"
 	"io"
 	"net/http"
@@ -16,41 +16,21 @@ import (
 )
 
 func (h *Handler) GetTransactions(c *gin.Context) {
-	userID := c.MustGet("userID").(string)
+	userID, _ := uuid.Parse(c.MustGet("userID").(string))
 
-	query := `SELECT * FROM transactions WHERE user_id = $1`
-	args := []interface{}{userID}
-	i := 2
-
-	if from := c.Query("date_from"); from != "" {
-		query += " AND date >= $" + strconv.Itoa(i)
-		args = append(args, from)
-		i++
-	}
-	if to := c.Query("date_to"); to != "" {
-		query += " AND date <= $" + strconv.Itoa(i)
-		args = append(args, to)
-		i++
-	}
-	if catID := c.Query("category_id"); catID != "" {
-		query += " AND category_id = $" + strconv.Itoa(i)
-		args = append(args, catID)
-		i++
-	}
-
-	limit := 50
-	offset := 0
+	f := repository.TransactionFilter{}
+	f.DateFrom = c.Query("date_from")
+	f.DateTo = c.Query("date_to")
+	f.CategoryID = c.Query("category_id")
 	if l := c.Query("limit"); l != "" {
-		limit, _ = strconv.Atoi(l)
+		f.Limit, _ = strconv.Atoi(l)
 	}
 	if o := c.Query("offset"); o != "" {
-		offset, _ = strconv.Atoi(o)
+		f.Offset, _ = strconv.Atoi(o)
 	}
-	query += " ORDER BY date DESC LIMIT $" + strconv.Itoa(i) + " OFFSET $" + strconv.Itoa(i+1)
-	args = append(args, limit, offset)
 
-	txs := make([]models.Transaction, 0)
-	if err := h.DB.SelectContext(c.Request.Context(), &txs, query, args...); err != nil {
+	txs, err := h.Transactions.List(c.Request.Context(), userID, f)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -73,9 +53,7 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	date, err := time.Parse("2006-01-02", req.Date)
-	if err != nil {
+	if _, err := time.Parse("2006-01-02", req.Date); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, use YYYY-MM-DD"})
 		return
 	}
@@ -90,20 +68,13 @@ func (h *Handler) CreateTransaction(c *gin.Context) {
 		catID = &id
 	}
 
-	var tx models.Transaction
-	err = h.DB.QueryRowxContext(c.Request.Context(),
-		`INSERT INTO transactions (user_id, amount, type, category_id, date, note)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-		userID, req.Amount, req.Type, catID, date, req.Note,
-	).StructScan(&tx)
+	tx, err := h.Transactions.Create(c.Request.Context(), userID, req.Amount, req.Type, catID, req.Date, req.Note)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Award XP
-	_ = services.AwardXP(c.Request.Context(), h.DB, userID, 10, "transaction_added")
-
+	_ = services.AwardXP(c.Request.Context(), h.Users, h.XPEvents, h.Achievements, h.Transactions, userID, 10, "transaction_added")
 	c.JSON(http.StatusCreated, tx)
 }
 
@@ -125,33 +96,20 @@ func (h *Handler) UpdateTransaction(c *gin.Context) {
 		return
 	}
 
-	var catID *uuid.UUID
+	var catID *string
 	if req.CategoryID != nil && *req.CategoryID != "" {
-		id, err := uuid.Parse(*req.CategoryID)
-		if err != nil {
+		if _, err := uuid.Parse(*req.CategoryID); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category_id"})
 			return
 		}
-		catID = &id
+		catID = req.CategoryID
 	}
 
-	var tx models.Transaction
-	err := h.DB.QueryRowxContext(c.Request.Context(), `
-		UPDATE transactions SET
-			amount      = COALESCE($1, amount),
-			type        = COALESCE($2, type),
-			category_id = COALESCE($3, category_id),
-			date        = COALESCE($4::date, date),
-			note        = COALESCE($5, note)
-		WHERE id = $6 AND user_id = $7
-		RETURNING *`,
-		req.Amount, req.Type, catID, req.Date, req.Note, txID, userID,
-	).StructScan(&tx)
+	tx, err := h.Transactions.Update(c.Request.Context(), txID, userID, req.Amount, req.Type, catID, req.Date, req.Note)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
 		return
 	}
-
 	c.JSON(http.StatusOK, tx)
 }
 
@@ -159,19 +117,15 @@ func (h *Handler) DeleteTransaction(c *gin.Context) {
 	userID := c.MustGet("userID").(string)
 	txID := c.Param("id")
 
-	res, err := h.DB.ExecContext(c.Request.Context(),
-		`DELETE FROM transactions WHERE id = $1 AND user_id = $2`, txID, userID,
-	)
+	n, err := h.Transactions.Delete(c.Request.Context(), txID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	n, _ := res.RowsAffected()
 	if n == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
 		return
 	}
-
 	c.JSON(http.StatusNoContent, nil)
 }
 
@@ -191,13 +145,8 @@ func (h *Handler) ImportTransactions(c *gin.Context) {
 		return
 	}
 
-	// Fetch categories for AI categorization
-	var catNames []string
-	_ = h.DB.SelectContext(c.Request.Context(), &catNames,
-		`SELECT name FROM categories WHERE user_id IS NULL OR user_id = $1`, userID,
-	)
+	catNames, _ := h.Categories.ListNamesForUser(c.Request.Context(), userID)
 
-	// Categorize
 	txForAI := make([]services.TransactionForAI, len(rows))
 	for i, r := range rows {
 		txForAI[i] = services.TransactionForAI{Note: r.Note}
@@ -206,39 +155,27 @@ func (h *Handler) ImportTransactions(c *gin.Context) {
 
 	imported := 0
 	for i, row := range rows {
-		// Resolve category ID by name
 		var catID *uuid.UUID
 		if catResults[i].CategoryName != "" {
-			var id uuid.UUID
-			err := h.DB.QueryRowContext(c.Request.Context(),
-				`SELECT id FROM categories WHERE name = $1 AND (user_id IS NULL OR user_id = $2) LIMIT 1`,
-				catResults[i].CategoryName, userID,
-			).Scan(&id)
+			id, err := h.Categories.FindIDByName(c.Request.Context(), catResults[i].CategoryName, userID)
 			if err == nil {
 				catID = &id
 			}
 		}
-
 		conf := catResults[i].Confidence
-		_, err := h.DB.ExecContext(c.Request.Context(), `
-			INSERT INTO transactions (user_id, amount, type, category_id, date, note, external_id, ai_confidence)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (user_id, external_id) DO NOTHING`,
-			userID, row.Amount, row.Type, catID, row.Date, row.Note, row.ExternalID, conf,
-		)
-		if err == nil {
+		var confPtr *float64
+		if conf > 0 {
+			confPtr = &conf
+		}
+		ok, err := h.Transactions.ImportOne(c.Request.Context(), userID, row.Amount, row.Type, catID, row.Date, row.Note, row.ExternalID, confPtr)
+		if err == nil && ok {
 			imported++
 		}
 	}
 
 	if imported > 0 {
-		_ = services.AwardXP(context.Background(), h.DB, userID, imported*5, "csv_import")
-		// Check first_import achievement
-		_, _ = h.DB.ExecContext(context.Background(), `
-			INSERT INTO user_achievements (user_id, achievement_id)
-			SELECT $1, id FROM achievements WHERE code = 'first_import'
-			ON CONFLICT DO NOTHING`, userID,
-		)
+		_ = services.AwardXP(context.Background(), h.Users, h.XPEvents, h.Achievements, h.Transactions, userID, imported*5, "csv_import")
+		_ = h.Achievements.Unlock(context.Background(), userID, "first_import")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"imported": imported, "total": len(rows)})
@@ -252,12 +189,9 @@ type csvRow struct {
 	ExternalID string
 }
 
-// parseCSV expects columns: date,amount,type,note (header row required)
-// type values: income | expense
 func parseCSV(r io.Reader) ([]csvRow, error) {
 	reader := csv.NewReader(r)
 	reader.TrimLeadingSpace = true
-
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, err
@@ -265,9 +199,8 @@ func parseCSV(r io.Reader) ([]csvRow, error) {
 	if len(records) < 2 {
 		return nil, nil
 	}
-
 	var rows []csvRow
-	for i, rec := range records[1:] { // skip header
+	for i, rec := range records[1:] {
 		if len(rec) < 3 {
 			continue
 		}
@@ -288,10 +221,7 @@ func parseCSV(r io.Reader) ([]csvRow, error) {
 			note = strings.TrimSpace(rec[3])
 		}
 		rows = append(rows, csvRow{
-			Amount:     amount,
-			Type:       txType,
-			Date:       date,
-			Note:       note,
+			Amount: amount, Type: txType, Date: date, Note: note,
 			ExternalID: strconv.Itoa(i),
 		})
 	}

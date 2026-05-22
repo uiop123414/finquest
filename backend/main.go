@@ -5,6 +5,7 @@ import (
 	"finquest/db"
 	"finquest/handlers"
 	"finquest/middleware"
+	"finquest/repository"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,20 @@ func main() {
 	database := db.Connect(cfg.DatabaseURL)
 	defer database.Close()
 
+	// ── Репозитории ──────────────────────────────────────────────────────────
+	txRepo := repository.NewTransactionRepo(database)
+	goalRepo := repository.NewGoalRepo(database)
+	depositRepo := repository.NewDepositRepo(database)
+	creditRepo := repository.NewCreditRepo(database)
+	catRepo := repository.NewCategoryRepo(database)
+	userRepo := repository.NewUserRepo(database)
+	achRepo := repository.NewAchievementRepo(database)
+	xpRepo := repository.NewXPEventRepo(database)
+
+	// ── Хендлер ─────────────────────────────────────────────────────────────
+	h := handlers.New(database, txRepo, goalRepo, depositRepo, creditRepo, catRepo, userRepo, achRepo, xpRepo, cfg)
+
+	// ── Роутер ──────────────────────────────────────────────────────────────
 	r := gin.Default()
 	r.Use(middleware.CORS())
 
@@ -22,17 +37,13 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	h := handlers.New(database, cfg)
-
 	api := r.Group("/api/v1")
 
-	// Public
 	auth := api.Group("/auth")
 	auth.POST("/register", h.Register)
 	auth.POST("/login", h.Login)
 	auth.POST("/refresh", h.Refresh)
 
-	// Protected
 	p := api.Group("/", middleware.AuthRequired(cfg.JWTSecret))
 
 	p.GET("/categories", h.GetCategories)

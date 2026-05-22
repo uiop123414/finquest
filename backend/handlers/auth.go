@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"finquest/models"
 	"net/http"
 	"time"
 
@@ -29,11 +28,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	err = h.DB.QueryRowxContext(c.Request.Context(),
-		`INSERT INTO users (email, hashed_password) VALUES ($1, $2) RETURNING *`,
-		req.Email, string(hash),
-	).StructScan(&user)
+	user, err := h.Users.Create(c.Request.Context(), req.Email, string(hash))
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
 		return
@@ -64,10 +59,8 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := h.DB.QueryRowxContext(c.Request.Context(),
-		`SELECT * FROM users WHERE email = $1`, req.Email,
-	).StructScan(&user); err != nil {
+	user, err := h.Users.FindByEmail(c.Request.Context(), req.Email)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -123,6 +116,28 @@ func (h *Handler) Refresh(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"access_token": access, "refresh_token": refresh})
+}
+
+func (h *Handler) GetGamificationProfile(c *gin.Context) {
+	userID, _ := uuid.Parse(c.MustGet("userID").(string))
+
+	user, err := h.Users.GetProfile(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	achievements, err := h.Achievements.ListForUser(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"xp_total":     user.XPTotal,
+		"level":        user.Level,
+		"achievements": achievements,
+	})
 }
 
 func (h *Handler) generateTokens(userID uuid.UUID) (access, refresh string, err error) {

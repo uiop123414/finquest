@@ -2,7 +2,7 @@
 
 # ─── Быстрый старт ───────────────────────────────────────────────────────────
 start:
-	@test -f .env || cp .env.example .env
+	@if not exist .env copy .env.example .env
 	docker-compose up --build -d
 	@echo ""
 	@echo "✓  FinQuest запущен!"
