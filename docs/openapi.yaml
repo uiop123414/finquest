@@ -1,0 +1,1236 @@
+openapi: 3.0.3
+info:
+  title: FinQuest API
+  description: |
+    Геймифицированный AI-ассистент для личных финансов.
+
+    ## Авторизация
+    Все защищённые эндпоинты требуют JWT Bearer токен в заголовке:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+    Токен выдаётся при регистрации/входе, живёт 30 минут.
+    Обновляется через `POST /auth/refresh` с refresh-токеном (7 дней).
+
+  version: "1.0.0"
+  contact:
+    name: Осипов Матвей, Виноградов Алексей
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Локальная разработка (Docker Compose)
+
+tags:
+  - name: Auth
+    description: Регистрация, вход, обновление токена
+  - name: Transactions
+    description: Управление транзакциями (доходы и расходы)
+  - name: Categories
+    description: Категории транзакций
+  - name: Analytics
+    description: Аналитика и статистика
+  - name: Goals
+    description: Финансовые цели
+  - name: Investments
+    description: Банковские депозиты
+  - name: Credits
+    description: Кредиты и кредитные карты
+  - name: Gamification
+    description: XP, уровни и достижения
+  - name: AI
+    description: AI-советник и чат
+
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [Auth]
+      security: []
+      responses:
+        "200":
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      summary: Регистрация нового пользователя
+      operationId: register
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+            example:
+              email: user@example.com
+              password: secret123
+      responses:
+        "201":
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "409":
+          description: Email уже занят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: email already exists
+
+  /auth/login:
+    post:
+      summary: Вход в систему
+      operationId: login
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        "200":
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      summary: Обновление access-токена
+      operationId: refreshToken
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Новые токены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Categories ──────────────────────────────────────────────────────────────
+  /categories:
+    get:
+      summary: Список категорий (системные + пользовательские)
+      operationId: getCategories
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Список категорий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Создать пользовательскую категорию
+      operationId: createCategory
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Спорт
+      responses:
+        "201":
+          description: Категория создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Transactions ─────────────────────────────────────────────────────────────
+  /transactions:
+    get:
+      summary: Список транзакций с фильтрами и пагинацией
+      operationId: getTransactions
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Количество записей на странице
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Смещение (для пагинации)
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Фильтр по категории
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2026-01-01"
+          description: Начало периода (включительно)
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2026-05-31"
+          description: Конец периода (включительно)
+      responses:
+        "200":
+          description: Список транзакций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Создать транзакцию
+      operationId: createTransaction
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+            example:
+              amount: 5000
+              type: expense
+              category_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              date: "2026-05-22"
+              note: Продукты в Пятёрочке
+      responses:
+        "201":
+          description: Транзакция создана, XP начислен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /transactions/{id}:
+    patch:
+      summary: Обновить транзакцию
+      operationId: updateTransaction
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        "200":
+          description: Транзакция обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Удалить транзакцию
+      operationId: deleteTransaction
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      responses:
+        "204":
+          description: Удалено
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /transactions/import:
+    post:
+      summary: Импорт транзакций из CSV
+      operationId: importTransactions
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      description: |
+        Формат CSV (заголовок обязателен):
+        ```
+        date,amount,type,note
+        2026-01-10,3500,expense,Пятёрочка продукты
+        2026-01-11,85000,income,Зарплата
+        ```
+        Категория определяется автоматически по ключевым словам в `note`.
+        Дубликаты игнорируются. За каждую запись начисляется +5 XP.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Результат импорта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                    example: 4
+                  total:
+                    type: integer
+                    example: 4
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Analytics ────────────────────────────────────────────────────────────────
+  /analytics/summary:
+    get:
+      summary: Сводная аналитика (доходы, расходы, баланс, по категориям)
+      operationId: getAnalyticsSummary
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-05"
+          description: Конкретный месяц в формате YYYY-MM
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [6m, 1y, all]
+          description: Диапазон (последние 6 мес / год / всё время). Игнорируется если задан `period`.
+      responses:
+        "200":
+          description: Сводка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/over-time:
+    get:
+      summary: Динамика доходов и расходов по периодам
+      operationId: getAnalyticsOverTime
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+            example: "2026-05"
+          description: Конкретный месяц → дневная детализация
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [6m, 1y, all]
+          description: Диапазон → месячная агрегация
+      responses:
+        "200":
+          description: Временной ряд
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OverTimePoint'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Goals ────────────────────────────────────────────────────────────────────
+  /goals:
+    get:
+      summary: Список финансовых целей
+      operationId: getGoals
+      tags: [Goals]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Список целей (активные первыми, затем выполненные)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Goal'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Создать финансовую цель
+      operationId: createGoal
+      tags: [Goals]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoalRequest'
+            example:
+              name: Отпуск в Турции
+              target_amount: 150000
+              current_amount: 0
+              deadline: "2026-08-01"
+      responses:
+        "201":
+          description: Цель создана (первая цель даёт +20 XP и ачивку «Мечтатель»)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /goals/{id}:
+    patch:
+      summary: Обновить цель (в т.ч. пополнить или закрыть)
+      operationId: updateGoal
+      tags: [Goals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                target_amount:
+                  type: number
+                current_amount:
+                  type: number
+                  description: Новое значение накоплений (не дельта)
+                deadline:
+                  type: string
+                  format: date
+                completed:
+                  type: boolean
+                  description: true — закрыть цель, false — возобновить
+            examples:
+              deposit:
+                summary: Пополнение накоплений
+                value:
+                  current_amount: 50000
+              close:
+                summary: Закрыть цель
+                value:
+                  completed: true
+      responses:
+        "200":
+          description: Цель обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Удалить цель
+      operationId: deleteGoal
+      tags: [Goals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      responses:
+        "204":
+          description: Удалено
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Investments / Deposits ───────────────────────────────────────────────────
+  /investments/deposits:
+    get:
+      summary: Список банковских депозитов
+      operationId: getDeposits
+      tags: [Investments]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Список депозитов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deposit'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Добавить депозит
+      operationId: createDeposit
+      tags: [Investments]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepositRequest'
+            example:
+              bank_name: Сбербанк
+              amount: 200000
+              interest_rate: 16.5
+              start_date: "2026-01-15"
+              end_date: "2026-07-15"
+              note: Вклад «Лучший старт»
+      responses:
+        "201":
+          description: Депозит добавлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deposit'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /investments/deposits/{id}:
+    patch:
+      summary: Обновить депозит
+      operationId: updateDeposit
+      tags: [Investments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepositRequest'
+      responses:
+        "200":
+          description: Депозит обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Deposit'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Удалить депозит
+      operationId: deleteDeposit
+      tags: [Investments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      responses:
+        "204":
+          description: Удалено
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Credits ──────────────────────────────────────────────────────────────────
+  /credits:
+    get:
+      summary: Список кредитов и кредитных карт
+      operationId: getCredits
+      tags: [Credits]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Список кредитов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Credit'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Добавить кредит / кредитную карту
+      operationId: createCredit
+      tags: [Credits]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCreditRequest'
+            example:
+              type: consumer
+              bank_name: Сбербанк
+              total_amount: 500000
+              remaining_balance: 320000
+              interest_rate: 14.9
+              monthly_payment: 12500
+              note: Кредит на ремонт
+      responses:
+        "201":
+          description: Кредит добавлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credit'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /credits/{id}:
+    patch:
+      summary: Обновить кредит
+      operationId: updateCredit
+      tags: [Credits]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCreditRequest'
+      responses:
+        "200":
+          description: Кредит обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credit'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Удалить кредит
+      operationId: deleteCredit
+      tags: [Credits]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      responses:
+        "204":
+          description: Удалено
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Gamification ─────────────────────────────────────────────────────────────
+  /gamification/profile:
+    get:
+      summary: Профиль геймификации (XP, уровень, ачивки)
+      operationId: getGamificationProfile
+      tags: [Gamification]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Профиль геймификации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamificationProfile'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── AI ───────────────────────────────────────────────────────────────────────
+  /ai/advice:
+    get:
+      summary: Персональный AI-совет по финансам
+      operationId: getAIAdvice
+      tags: [AI]
+      security:
+        - BearerAuth: []
+      description: |
+        Анализирует транзакции за 30 дней, депозиты, кредиты и активные цели.
+        Возвращает 4–5 конкретных советов.
+
+        **Провайдеры (приоритет):**
+        1. Claude Haiku — если задан `ANTHROPIC_API_KEY`
+        2. Gemini 2.0 Flash — если задан `GEMINI_API_KEY` (бесплатно)
+        3. Rule-based fallback — работает без ключей
+      responses:
+        "200":
+          description: Совет сгенерирован
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  advice:
+                    type: string
+                    description: Текст совета (4–5 пунктов)
+                    example: "Ваша норма сбережений 22% — хороший показатель. Депозит в Сбербанке приносит 33 000 ₽/год..."
+                  context:
+                    type: string
+                    description: Финансовый контекст, переданный в LLM
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /ai/chat:
+    post:
+      summary: Чат с AI (Server-Sent Events)
+      operationId: aiChat
+      tags: [AI]
+      security:
+        - BearerAuth: []
+      description: |
+        Стриминговый чат. Ответ передаётся через SSE (`text/event-stream`).
+        Требует `ANTHROPIC_API_KEY`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: Как мне сократить расходы на еду?
+      responses:
+        "200":
+          description: SSE поток с токенами ответа
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token (30 мин). Получить через /auth/login или /auth/register.
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUID ресурса
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос (ошибка валидации)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Key: 'amount' Error:Field validation for 'amount' failed on the 'gt' tag"
+    Unauthorized:
+      description: Отсутствует или недействителен токен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not found
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    AuthRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 6
+          example: secret123
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        access_token:
+          type: string
+          description: JWT, живёт 30 минут
+        refresh_token:
+          type: string
+          description: JWT, живёт 7 дней
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        xp_total:
+          type: integer
+          example: 150
+        level:
+          type: integer
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: null для системных категорий
+        name:
+          type: string
+          example: Еда
+        is_system:
+          type: boolean
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          example: 5000
+        type:
+          type: string
+          enum: [income, expense]
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        date:
+          type: string
+          format: date
+          example: "2026-05-22"
+        note:
+          type: string
+          example: Продукты
+        created_at:
+          type: string
+          format: date-time
+
+    CreateTransactionRequest:
+      type: object
+      required: [amount, type, date]
+      properties:
+        amount:
+          type: number
+          minimum: 0.01
+          example: 5000
+        type:
+          type: string
+          enum: [income, expense]
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        date:
+          type: string
+          format: date
+          example: "2026-05-22"
+        note:
+          type: string
+          example: Покупка продуктов
+
+    Goal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Отпуск в Турции
+        target_amount:
+          type: number
+          example: 150000
+        current_amount:
+          type: number
+          example: 42000
+        deadline:
+          type: string
+          format: date
+          example: "2026-08-01"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateGoalRequest:
+      type: object
+      required: [name, target_amount, deadline]
+      properties:
+        name:
+          type: string
+        target_amount:
+          type: number
+          minimum: 1
+        current_amount:
+          type: number
+          minimum: 0
+          default: 0
+        deadline:
+          type: string
+          format: date
+
+    Deposit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        bank_name:
+          type: string
+          example: Сбербанк
+        amount:
+          type: number
+          example: 200000
+        interest_rate:
+          type: number
+          example: 16.5
+          description: Годовая ставка в процентах
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDepositRequest:
+      type: object
+      required: [bank_name, amount, interest_rate, start_date, end_date]
+      properties:
+        bank_name:
+          type: string
+        amount:
+          type: number
+          minimum: 0.01
+        interest_rate:
+          type: number
+          minimum: 0
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        note:
+          type: string
+
+    Credit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [consumer, card]
+          description: consumer — потребительский кредит, card — кредитная карта
+        bank_name:
+          type: string
+          example: Сбербанк
+        total_amount:
+          type: number
+          example: 500000
+          description: Сумма кредита / лимит карты
+        remaining_balance:
+          type: number
+          example: 320000
+          description: Текущий остаток долга
+        interest_rate:
+          type: number
+          example: 14.9
+        monthly_payment:
+          type: number
+          example: 12500
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateCreditRequest:
+      type: object
+      required: [type, bank_name, total_amount, interest_rate]
+      properties:
+        type:
+          type: string
+          enum: [consumer, card]
+        bank_name:
+          type: string
+        total_amount:
+          type: number
+          minimum: 0.01
+        remaining_balance:
+          type: number
+          minimum: 0
+          default: 0
+        interest_rate:
+          type: number
+          minimum: 0
+        monthly_payment:
+          type: number
+          minimum: 0
+          default: 0
+        note:
+          type: string
+
+    GamificationProfile:
+      type: object
+      properties:
+        xp_total:
+          type: integer
+          example: 150
+        level:
+          type: integer
+          example: 2
+        level_progress_pct:
+          type: integer
+          example: 50
+          description: Прогресс до следующего уровня (0–100)
+        achievements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Achievement'
+
+    Achievement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          enum:
+            - first_transaction
+            - ten_transactions
+            - hundred_transactions
+            - level_5
+            - first_goal
+            - first_import
+        name:
+          type: string
+          example: Первый шаг
+        description:
+          type: string
+          example: Добавьте первую транзакцию
+        earned_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: null — ачивка ещё не получена
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        income:
+          type: number
+          example: 93500
+        expense:
+          type: number
+          example: 71200
+        balance:
+          type: number
+          example: 22300
+        by_category:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                example: Еда
+              amount:
+                type: number
+                example: 18400
+
+    OverTimePoint:
+      type: object
+      properties:
+        period:
+          type: string
+          description: Месяц (YYYY-MM) или день (DD) в зависимости от режима
+          example: "2026-05"
+        income:
+          type: number
+          example: 93500
+        expense:
+          type: number
+          example: 71200
