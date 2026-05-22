@@ -60,7 +60,18 @@ func main() {
 	p.PATCH("/goals/:id", h.UpdateGoal)
 	p.DELETE("/goals/:id", h.DeleteGoal)
 
+	p.GET("/investments/deposits", h.GetDeposits)
+	p.POST("/investments/deposits", h.CreateDeposit)
+	p.PATCH("/investments/deposits/:id", h.UpdateDeposit)
+	p.DELETE("/investments/deposits/:id", h.DeleteDeposit)
+
+	p.GET("/credits", h.GetCredits)
+	p.POST("/credits", h.CreateCredit)
+	p.PATCH("/credits/:id", h.UpdateCredit)
+	p.DELETE("/credits/:id", h.DeleteCredit)
+
 	p.POST("/ai/chat", h.AIChat)
+	p.GET("/ai/advice", h.GetAIAdvice)
 
 	r.Run(":" + cfg.Port)
 }

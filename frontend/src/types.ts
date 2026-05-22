@@ -62,6 +62,31 @@ export interface OverTimePoint {
   expense: number
 }
 
+export interface Deposit {
+  id: string
+  user_id: string
+  bank_name: string
+  amount: number
+  interest_rate: number
+  start_date: string
+  end_date: string
+  note: string
+  created_at: string
+}
+
+export interface Credit {
+  id: string
+  user_id: string
+  type: 'consumer' | 'card'
+  bank_name: string
+  total_amount: number
+  remaining_balance: number
+  interest_rate: number
+  monthly_payment: number
+  note: string
+  created_at: string
+}
+
 export interface AuthResponse {
   user: User
   access_token: string

@@ -12,6 +12,7 @@ type Config struct {
 	JWTSecret    string
 	Port         string
 	AnthropicKey string
+	GeminiKey    string
 }
 
 func Load() *Config {
@@ -27,6 +28,7 @@ func Load() *Config {
 		JWTSecret:    os.Getenv("JWT_SECRET"),
 		Port:         port,
 		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
+		GeminiKey:    os.Getenv("GEMINI_API_KEY"),
 	}
 
 	if cfg.DatabaseURL == "" {

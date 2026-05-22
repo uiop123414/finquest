@@ -1,4 +1,4 @@
-.PHONY: install dev backend frontend up down migrate lint test start
+.PHONY: install dev backend frontend up down migrate migrate-down lint lint-go lint-js test test-go test-js build start logs help
 
 # ─── Быстрый старт ───────────────────────────────────────────────────────────
 start:
@@ -9,9 +9,13 @@ start:
 	@echo "   Фронт  →  http://localhost:3000"
 	@echo "   API    →  http://localhost:8000"
 	@echo ""
-	@echo "   Демо-аккаунт (100 транзакций уже загружены):"
+	@echo "   Демо-аккаунт (транзакции, депозиты, кредиты, цели уже загружены):"
 	@echo "   Email   →  demo@finquest.ru"
 	@echo "   Пароль  →  demo123"
+	@echo ""
+	@echo "   AI советник:"
+	@echo "   Бесплатно  →  добавьте GEMINI_API_KEY в .env"
+	@echo "   Платно     →  добавьте ANTHROPIC_API_KEY в .env"
 	@echo ""
 	@echo "   Логи   →  make logs"
 
@@ -53,13 +57,26 @@ migrate-down:
 		down 1
 
 # ─── Качество ─────────────────────────────────────────────────────────────────
-lint:
-	cd backend && golangci-lint run ./...
+lint: lint-go lint-js
+
+lint-go:
+	cd backend && golangci-lint run --config .golangci.yml ./...
+
+lint-js:
 	cd frontend && npm run lint
 
-test:
+# ─── Тесты ────────────────────────────────────────────────────────────────────
+test: test-go test-js
+
+test-go:
 	cd backend && go test ./... -v
+
+test-js:
 	cd frontend && npm run test
+
+# Интеграционные тесты (требуют запущенной БД)
+test-integration:
+	cd backend && TEST_DATABASE_URL="$(DATABASE_URL)" go test -v -tags=integration ./...
 
 # ─── Docker ───────────────────────────────────────────────────────────────────
 up:
@@ -68,5 +85,24 @@ up:
 down:
 	docker-compose down
 
+down-volumes:
+	docker-compose down -v
+
 logs:
 	docker-compose logs -f
+
+# ─── Помощь ───────────────────────────────────────────────────────────────────
+help:
+	@echo "Доступные команды:"
+	@echo "  make start             — собрать и запустить всё через Docker"
+	@echo "  make dev               — локальный запуск backend + frontend"
+	@echo "  make install           — установить npm-зависимости"
+	@echo "  make build             — скомпилировать backend"
+	@echo "  make migrate           — применить миграции БД"
+	@echo "  make migrate-down      — откатить последнюю миграцию"
+	@echo "  make lint              — запустить golangci-lint + eslint"
+	@echo "  make test              — unit-тесты Go + JS"
+	@echo "  make test-integration  — интеграционные тесты (нужна БД)"
+	@echo "  make logs              — логи Docker-контейнеров"
+	@echo "  make down              — остановить контейнеры"
+	@echo "  make down-volumes      — остановить контейнеры + удалить данные БД"

@@ -8,9 +8,13 @@ type Modal =
   | { type: 'edit'; goal: Goal }
   | null
 
+const PAGE_SIZE = 5
+
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [modal, setModal] = useState<Modal>(null)
+  const [activePage, setActivePage] = useState(0)
+  const [donePage, setDonePage] = useState(0)
 
   // form states
   const [createForm, setCreateForm] = useState({ name: '', target_amount: '', current_amount: '', deadline: '' })
@@ -87,6 +91,8 @@ export default function GoalsPage() {
 
   const active = goals.filter((g) => !g.completed_at)
   const done = goals.filter((g) => g.completed_at)
+  const activeSlice = active.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE)
+  const doneSlice = done.slice(donePage * PAGE_SIZE, (donePage + 1) * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -102,21 +108,29 @@ export default function GoalsPage() {
 
       {/* Active goals */}
       <div className="space-y-3">
-        {active.map((g) => <GoalCard key={g.id} goal={g} fmt={fmt} onDeposit={() => { setDepositAmount(''); setModal({ type: 'deposit', goal: g }) }} onEdit={() => openEdit(g)} onToggle={() => toggleComplete(g)} onDelete={() => deleteGoal(g.id)} />)}
+        {activeSlice.map((g) => <GoalCard key={g.id} goal={g} fmt={fmt} onDeposit={() => { setDepositAmount(''); setModal({ type: 'deposit', goal: g }) }} onEdit={() => openEdit(g)} onToggle={() => toggleComplete(g)} onDelete={() => deleteGoal(g.id)} />)}
         {active.length === 0 && (
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center text-gray-400 text-sm">
             Активных целей нет. Создайте первую!
           </div>
         )}
       </div>
+      {active.length > PAGE_SIZE && (
+        <Pager page={activePage} total={active.length} pageSize={PAGE_SIZE} onChange={setActivePage} />
+      )}
 
       {/* Completed goals */}
       {done.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Выполнено</h2>
           <div className="space-y-3">
-            {done.map((g) => <GoalCard key={g.id} goal={g} fmt={fmt} onDeposit={() => { setDepositAmount(''); setModal({ type: 'deposit', goal: g }) }} onEdit={() => openEdit(g)} onToggle={() => toggleComplete(g)} onDelete={() => deleteGoal(g.id)} />)}
+            {doneSlice.map((g) => <GoalCard key={g.id} goal={g} fmt={fmt} onDeposit={() => { setDepositAmount(''); setModal({ type: 'deposit', goal: g }) }} onEdit={() => openEdit(g)} onToggle={() => toggleComplete(g)} onDelete={() => deleteGoal(g.id)} />)}
           </div>
+          {done.length > PAGE_SIZE && (
+            <div className="mt-3">
+              <Pager page={donePage} total={done.length} pageSize={PAGE_SIZE} onChange={setDonePage} />
+            </div>
+          )}
         </div>
       )}
 
@@ -178,6 +192,24 @@ export default function GoalsPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Pager ───────────────────────────────────────────────────────────────────
+function Pager({ page, total, pageSize, onChange }: { page: number; total: number; pageSize: number; onChange: (p: number) => void }) {
+  const pages = Math.ceil(total / pageSize)
+  return (
+    <div className="flex items-center justify-between text-sm text-gray-500 mt-1">
+      <button onClick={() => onChange(Math.max(0, page - 1))} disabled={page === 0}
+        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-30 hover:bg-gray-50 disabled:cursor-default text-xs">
+        ← Назад
+      </button>
+      <span className="text-xs">{page + 1} / {pages}</span>
+      <button onClick={() => onChange(Math.min(pages - 1, page + 1))} disabled={page >= pages - 1}
+        className="px-3 py-1.5 rounded-lg border border-gray-200 disabled:opacity-30 hover:bg-gray-50 disabled:cursor-default text-xs">
+        Вперёд →
+      </button>
     </div>
   )
 }

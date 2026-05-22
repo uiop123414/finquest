@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AchievementsPage from './pages/AchievementsPage'
+import CreditsPage from './pages/CreditsPage'
 import DashboardPage from './pages/DashboardPage'
 import GoalsPage from './pages/GoalsPage'
 import ImportPage from './pages/ImportPage'
+import InvestmentsPage from './pages/InvestmentsPage'
 import LoginPage from './pages/LoginPage'
 import TransactionsPage from './pages/TransactionsPage'
 import Layout from './components/Layout'
@@ -29,6 +31,8 @@ export default function App() {
           <Route path="import" element={<ImportPage />} />
           <Route path="achievements" element={<AchievementsPage />} />
           <Route path="goals" element={<GoalsPage />} />
+          <Route path="investments" element={<InvestmentsPage />} />
+          <Route path="credits" element={<CreditsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

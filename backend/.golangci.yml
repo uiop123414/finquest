@@ -1,0 +1,46 @@
+version: "2"
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - errname
+    - errcheck
+    - staticcheck
+    - gocritic
+    - gosec
+    - asciicheck
+    - contextcheck
+    - nilnil
+    - nolintlint
+    - unused
+    - paralleltest
+
+linters-settings:
+  gosec:
+    excludes:
+      - "G115" # Type conversion which leads to integer overflow
+      - "G117"
+      - "G705"
+  
+# exclusions:
+#   rules:
+#     # Exclude some linters from running on tests files.
+#     - path: _test\.go
+#       linters:
+#         - gocyclo
+#         - errcheck
+#         - dupl
+#         - gosec
+#     # paths:
+#     #   - ".*\\.my\\.go$"
+#     #   - lib/bad.go
+
+output:
+  format: colored-line-number
+
+issues:
+  exclude-use-default: false
