@@ -278,7 +278,7 @@ function AIAdviceWidget() {
     try {
       const resp = await fetch('/api/v1/ai/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
         body: JSON.stringify({ message: text }),
       })
       const reader = resp.body?.getReader()
