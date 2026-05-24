@@ -137,18 +137,16 @@ export default function DashboardPage() {
           {/* Pie chart */}
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Расходы по категориям</h2>
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
-              <div className="w-full sm:w-44 flex-shrink-0">
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={40}>
-                      {summary.by_category.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => fmt(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <ul className="space-y-1.5 text-xs w-full">
+            <div className="flex gap-4 items-center">
+              <ResponsiveContainer width={180} height={180}>
+                <PieChart>
+                  <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={40}>
+                    {summary.by_category.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => fmt(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+              <ul className="space-y-1.5 text-xs flex-1">
                 {summary.by_category.slice(0, 7).map((item, i) => (
                   <li key={i} className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
@@ -235,45 +233,215 @@ function StatCard({ label, value, color }: { label: string; value: string; color
   )
 }
 
+// ── Preset prompt topics ──────────────────────────────────────────────────────
+const TOPICS = [
+  { key: 'general',     label: 'Общий анализ',   emoji: '🔍', desc: 'Полный обзор финансового здоровья' },
+  { key: 'savings',     label: 'Сбережения',      emoji: '💰', desc: 'Как откладывать больше и умнее' },
+  { key: 'investments', label: 'Инвестиции',      emoji: '📈', desc: 'Куда вложить свободные средства' },
+  { key: 'debt',        label: 'Долги',           emoji: '🏦', desc: 'Стратегия погашения и рефинансирования' },
+  { key: 'goals',       label: 'Цели',            emoji: '🎯', desc: 'Достижение финансовых целей' },
+]
+
 function AIAdviceWidget() {
-  const [advice, setAdvice] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [activeTopic, setActiveTopic] = useState<string | null>(null)
+  const [advice, setAdvice] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState<string | null>(null)
+  const [tab, setTab] = useState<'prompts' | 'chat'>('prompts')
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  function load() {
+  function loadAdvice(topic: string) {
     if (loading) return
     abortRef.current?.abort()
     abortRef.current = new AbortController()
-    setLoading(true)
-    api.get<{ advice: string }>('/ai/advice', { signal: abortRef.current.signal })
-      .then((r) => { setAdvice(r.data.advice); setLoaded(true) })
-      .catch(() => setAdvice('Не удалось получить совет. Проверьте ANTHROPIC_API_KEY.'))
-      .finally(() => setLoading(false))
+    setActiveTopic(topic)
+    setLoading(topic)
+    api.get<{ advice: string }>('/ai/advice', {
+      params: { topic },
+      signal: abortRef.current.signal,
+    })
+      .then((r) => setAdvice((prev) => ({ ...prev, [topic]: r.data.advice })))
+      .catch(() => setAdvice((prev) => ({ ...prev, [topic]: 'Не удалось получить ответ. Проверьте ANTHROPIC_API_KEY.' })))
+      .finally(() => setLoading(null))
   }
 
+  async function sendChat() {
+    const text = chatInput.trim()
+    if (!text || chatLoading) return
+    setChatInput('')
+    setChatMessages((prev) => [...prev, { role: 'user', text }])
+    setChatLoading(true)
+
+    try {
+      const resp = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ message: text }),
+      })
+      const reader = resp.body?.getReader()
+      const decoder = new TextDecoder()
+      let aiText = ''
+      setChatMessages((prev) => [...prev, { role: 'ai', text: '' }])
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value)
+          // SSE: extract text from data: lines
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue
+            try {
+              const json = JSON.parse(line.slice(5).trim())
+              const delta = json?.delta?.text || json?.reply || ''
+              aiText += delta
+              setChatMessages((prev) => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: 'ai', text: aiText }
+                return updated
+              })
+            } catch { /* skip */ }
+          }
+        }
+      }
+    } catch {
+      setChatMessages((prev) => [...prev, { role: 'ai', text: 'Ошибка подключения к AI.' }])
+    } finally {
+      setChatLoading(false)
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    }
+  }
+
+  const currentAdvice = activeTopic ? advice[activeTopic] : null
+
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-lg">🤖</span>
-          <h2 className="text-sm font-semibold text-gray-700">Мнение нейросети</h2>
-          <span className="hidden sm:inline text-xs text-gray-400">учитывает транзакции, депозиты, кредиты и цели</span>
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header + tabs */}
+      <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🤖</span>
+            <h2 className="text-sm font-semibold text-gray-700">AI-советник</h2>
+          </div>
+          <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
+            <button
+              onClick={() => setTab('prompts')}
+              className={`px-3 py-1 rounded-md transition-colors ${tab === 'prompts' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Анализ
+            </button>
+            <button
+              onClick={() => setTab('chat')}
+              className={`px-3 py-1 rounded-md transition-colors ${tab === 'chat' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Чат
+            </button>
+          </div>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 disabled:opacity-50 font-medium"
-        >
-          {loading ? 'Анализирую...' : loaded ? 'Обновить' : 'Получить совет'}
-        </button>
       </div>
-      {advice ? (
-        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{advice}</p>
-      ) : (
-        <p className="text-sm text-gray-400">
-          Нажмите кнопку — нейросеть проанализирует транзакции, депозиты, кредиты и цели за последние 30 дней и даст персональный совет.
-        </p>
+
+      {/* Prompts tab */}
+      {tab === 'prompts' && (
+        <div className="p-5">
+          {/* Topic cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+            {TOPICS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => loadAdvice(t.key)}
+                disabled={loading === t.key}
+                className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all text-xs font-medium
+                  ${activeTopic === t.key
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50/50'}
+                  ${loading === t.key ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
+              >
+                <span className="text-xl">{loading === t.key ? '⏳' : t.emoji}</span>
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Hint or result */}
+          {!activeTopic && (
+            <p className="text-sm text-gray-400 text-center py-4">
+              Выберите направление — AI проанализирует ваши данные за 30 дней
+            </p>
+          )}
+
+          {activeTopic && !currentAdvice && loading && (
+            <div className="flex items-center gap-2 text-sm text-indigo-500 py-4">
+              <span className="animate-spin">⏳</span>
+              <span>Анализирую данные...</span>
+            </div>
+          )}
+
+          {currentAdvice && (
+            <div className="bg-indigo-50 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span>{TOPICS.find(t => t.key === activeTopic)?.emoji}</span>
+                <span className="text-xs font-semibold text-indigo-600">
+                  {TOPICS.find(t => t.key === activeTopic)?.label}
+                </span>
+                <button
+                  onClick={() => loadAdvice(activeTopic!)}
+                  disabled={!!loading}
+                  className="ml-auto text-xs text-indigo-400 hover:text-indigo-600 disabled:opacity-50"
+                >
+                  ↻ обновить
+                </button>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{currentAdvice}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Chat tab */}
+      {tab === 'chat' && (
+        <div className="flex flex-col h-72">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {chatMessages.length === 0 && (
+              <p className="text-sm text-gray-400 text-center mt-8">
+                Задайте любой вопрос о ваших финансах
+              </p>
+            )}
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                  m.role === 'user'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {m.text || <span className="animate-pulse text-gray-400">...</span>}
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="border-t border-gray-100 p-3 flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+              placeholder="Например: стоит ли досрочно погасить кредит?"
+              className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-300"
+              disabled={chatLoading}
+            />
+            <button
+              onClick={sendChat}
+              disabled={chatLoading || !chatInput.trim()}
+              className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+            >
+              ➤
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
